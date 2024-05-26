@@ -1,75 +1,56 @@
 package org.sabbelsocke.randomtp.utils;
 
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Random;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 
 public class LocationGenerator {
 
+    private static final Set<Material> UNSAFE_MATERIALS = new HashSet<>();
 
-    public static @NotNull Location generateLocationAsync(Plugin plugin, World world) throws ExecutionException, InterruptedException {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        Callable<Location> callable = new Callable<Location>() {
-            @Override
-            public Location call() {
-                List<String> unsafeMaterials = new ArrayList<String>();
-                unsafeMaterials.add("ACACIA_LEAVES");
-                unsafeMaterials.add("AZALEA_LEAVES");
-                unsafeMaterials.add("BIRCH_LEAVES");
-                unsafeMaterials.add("DARK_OAK_LEAVES");
-                unsafeMaterials.add("FLOWERING_AZALEA_LEAVES");
-                unsafeMaterials.add("JUNGLE_LEAVES");
-                unsafeMaterials.add("OAK_LEAVES");
-                unsafeMaterials.add("SPRUCE_LEAVES");
-                unsafeMaterials.add("CACTUS");
-                unsafeMaterials.add("FIRE");
-                unsafeMaterials.add("LAVA");
-                unsafeMaterials.add("LAVA_CAULDRON");
-                unsafeMaterials.add("MAGMA_BLOCK");
-                unsafeMaterials.add("WATER");
-
-                int xlimit = (int) (world.getWorldBorder().getSize() / 2);
-                int zlimit = (int) (world.getWorldBorder().getSize() / 2);
-
-                Random random = new Random();
-                boolean negx = random.nextBoolean();
-                boolean negz = random.nextBoolean();
-                while (true) {
-                    int x = 0;
-                    int z = 0;
-                    if (negx) {
-                        x = x - random.nextInt(xlimit);
-                    } else {
-                        x = x + random.nextInt(xlimit);
-                    }
-
-                    if (negz) {
-                        z = z - random.nextInt(zlimit);
-                    } else {
-                        z = z + random.nextInt(zlimit);
-                    }
-
-                    Block block = world.getHighestBlockAt(x, z);
-                    Block higherBlock = world.getBlockAt(x, block.getY() + 2, z);
-
-                    if (unsafeMaterials.contains(block.getType().toString()) || unsafeMaterials.contains(higherBlock.getType().toString()))
-                        continue;
-                    return new Location(world, x + .5, block.getY() + 1, z + .5);
-                }
-            }
-        };
-
-        return executor.submit(callable).get();
+    static {
+        UNSAFE_MATERIALS.add(Material.ACACIA_LEAVES);
+        UNSAFE_MATERIALS.add(Material.AZALEA_LEAVES);
+        UNSAFE_MATERIALS.add(Material.BIRCH_LEAVES);
+        UNSAFE_MATERIALS.add(Material.DARK_OAK_LEAVES);
+        UNSAFE_MATERIALS.add(Material.FLOWERING_AZALEA_LEAVES);
+        UNSAFE_MATERIALS.add(Material.JUNGLE_LEAVES);
+        UNSAFE_MATERIALS.add(Material.OAK_LEAVES);
+        UNSAFE_MATERIALS.add(Material.SPRUCE_LEAVES);
+        UNSAFE_MATERIALS.add(Material.CACTUS);
+        UNSAFE_MATERIALS.add(Material.FIRE);
+        UNSAFE_MATERIALS.add(Material.LAVA);
+        UNSAFE_MATERIALS.add(Material.LAVA_CAULDRON);
+        UNSAFE_MATERIALS.add(Material.MAGMA_BLOCK);
+        UNSAFE_MATERIALS.add(Material.WATER);
     }
 
+    public static @NotNull CompletableFuture<Location> generateLocationAsync(Plugin plugin, World world) {
+        return CompletableFuture.supplyAsync(() -> {
+            Random random = new Random();
+            int xlimit = (int) (world.getWorldBorder().getSize() / 2);
+            int zlimit = (int) (world.getWorldBorder().getSize() / 2);
+
+            while (true) {
+                int x = random.nextInt(xlimit * 2) - xlimit;
+                int z = random.nextInt(zlimit * 2) - zlimit;
+
+                Block block = world.getHighestBlockAt(x, z);
+                Block higherBlock = world.getBlockAt(x, block.getY() + 2, z);
+
+                if (!UNSAFE_MATERIALS.contains(block.getType()) && !UNSAFE_MATERIALS.contains(higherBlock.getType())) {
+                    return new Location(world, x + 0.5, block.getY() + 1, z + 0.5);
+                }
+            }
+        }, CompletableFuture.delayedExecutor(0, java.util.concurrent.TimeUnit.MILLISECONDS, Executors.newCachedThreadPool()));
+    }
 }
