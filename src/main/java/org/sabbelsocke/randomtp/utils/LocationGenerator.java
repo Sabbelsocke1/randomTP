@@ -34,23 +34,42 @@ public class LocationGenerator {
         UNSAFE_MATERIALS.add(Material.WATER);
     }
 
+
     public static @NotNull CompletableFuture<Location> generateLocationAsync(Plugin plugin, World world) {
         return CompletableFuture.supplyAsync(() -> {
             Random random = new Random();
             int xlimit = (int) (world.getWorldBorder().getSize() / 2);
             int zlimit = (int) (world.getWorldBorder().getSize() / 2);
 
-            while (true) {
+            Location location = null;
+
+            while (location == null) {
                 int x = random.nextInt(xlimit * 2) - xlimit;
                 int z = random.nextInt(zlimit * 2) - zlimit;
 
-                Block block = world.getHighestBlockAt(x, z);
-                Block higherBlock = world.getBlockAt(x, block.getY() + 2, z);
+                CompletableFuture<Location> locationFuture = new CompletableFuture<>();
+                int finalX = x;
+                int finalZ = z;
 
-                if (!UNSAFE_MATERIALS.contains(block.getType()) && !UNSAFE_MATERIALS.contains(higherBlock.getType())) {
-                    return new Location(world, x + 0.5, block.getY() + 1, z + 0.5);
+                world.getChunkAtAsync(x >> 4, z >> 4).thenRun(() -> {
+                    Block block = world.getHighestBlockAt(finalX, finalZ);
+                    Block higherBlock = world.getBlockAt(finalX, block.getY() + 2, finalZ);
+
+                    if (!UNSAFE_MATERIALS.contains(block.getType()) && !UNSAFE_MATERIALS.contains(higherBlock.getType())) {
+                        locationFuture.complete(new Location(world, finalX + 0.5, block.getY() + 1, finalZ + 0.5));
+                    } else {
+                        locationFuture.complete(null);
+                    }
+                });
+
+                try {
+                    location = locationFuture.join();
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
+
+            return location;
         }, CompletableFuture.delayedExecutor(0, java.util.concurrent.TimeUnit.MILLISECONDS, Executors.newCachedThreadPool()));
     }
 }
